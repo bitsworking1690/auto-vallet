@@ -1,0 +1,101 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-inter: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    scroll-behavior: smooth;
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-white text-neutral-800;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Focus rings – accessible, not intrusive */
+  *:focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-500 rounded-sm;
+  }
+
+  /* Smooth scrolling for anchor links */
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 80px;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-brand-600 text-white font-semibold
+           px-6 py-3.5 rounded-xl
+           transition-all duration-200
+           hover:bg-brand-700 active:scale-[0.98]
+           shadow-sm hover:shadow-md
+           focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2
+           bg-white text-neutral-700 font-semibold
+           px-6 py-3.5 rounded-xl border border-neutral-200
+           transition-all duration-200
+           hover:bg-neutral-50 hover:border-neutral-300 active:scale-[0.98]
+           shadow-sm focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2;
+  }
+
+  .section-label {
+    @apply text-xs font-semibold tracking-widest uppercase text-brand-600;
+  }
+
+  .section-heading {
+    @apply text-3xl md:text-4xl font-bold text-neutral-900 leading-tight tracking-tight;
+  }
+
+  .section-subheading {
+    @apply text-lg text-neutral-500 leading-relaxed;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl border border-neutral-100 shadow-card p-6;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl border border-neutral-200
+           text-neutral-900 placeholder-neutral-400
+           bg-white text-sm
+           transition-colors duration-150
+           focus:outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-100;
+  }
+
+  .input-label {
+    @apply block text-sm font-medium text-neutral-700 mb-1.5;
+  }
+
+  .input-error {
+    @apply text-red-500 text-xs mt-1;
+  }
+}
+
+@layer utilities {
+  .animate-delay-100 { animation-delay: 100ms; }
+  .animate-delay-200 { animation-delay: 200ms; }
+  .animate-delay-300 { animation-delay: 300ms; }
+  .animate-delay-400 { animation-delay: 400ms; }
+  .animate-delay-500 { animation-delay: 500ms; }
+
+  .gradient-brand {
+    background: linear-gradient(135deg, #0e96e7 0%, #0260a0 100%);
+  }
+
+  .gradient-subtle {
+    background: linear-gradient(180deg, #f0f7ff 0%, #ffffff 100%);
+  }
+}
