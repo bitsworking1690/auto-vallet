@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { bookingSchema, type BookingFormValues, TIME_SLOTS, BASE_SERVICE_PRICE_CENTS } from '@/lib/validations'
+import { bookingSchema, type BookingFormValues, TIME_SLOTS, TRIP_TYPES } from '@/lib/validations'
 import { CheckCircle2, Upload, X, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import clsx from 'clsx'
@@ -39,15 +39,16 @@ function Divider() {
 
 // ─── Price summary shown above CTA ───────────────────────────────────────────
 
-function PriceSummary({ tipAmount, addTip }: { tipAmount?: number; addTip?: boolean }) {
-  const base  = BASE_SERVICE_PRICE_CENTS / 100
+function PriceSummary({ tipAmount, addTip, tripType }: { tipAmount?: number; addTip?: boolean; tripType?: string }) {
+  const trip  = TRIP_TYPES.find(t => t.value === tripType) ?? TRIP_TYPES[0]
+  const base  = trip.price
   const tip   = addTip && tipAmount ? tipAmount : 0
   const total = base + tip
 
   return (
     <div className="rounded-2xl bg-neutral-50 border border-neutral-100 p-5 space-y-2.5">
       <div className="flex justify-between text-sm text-neutral-600">
-        <span>Concierge service fee</span>
+        <span>{trip.label} service fee</span>
         <span className="font-medium text-neutral-900">${base.toFixed(2)}</span>
       </div>
       {tip > 0 && (
@@ -69,6 +70,15 @@ function PriceSummary({ tipAmount, addTip }: { tipAmount?: number; addTip?: bool
 
 // ─── Main form ────────────────────────────────────────────────────────────────
 
+// Get today's date in YYYY-MM-DD format (local time)
+function todayString() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export default function BookingForm() {
   const [serverError,   setServerError]   = useState<string | null>(null)
   const [insuranceFile, setInsuranceFile] = useState<File | null>(null)
@@ -84,13 +94,18 @@ export default function BookingForm() {
     formState: { errors, isSubmitting },
   } = useForm<BookingFormValues>({
     resolver: zodResolver(bookingSchema),
-    defaultValues: { addTip: false, tipAmount: 0 },
+    defaultValues: {
+      addTip:     false,
+      tipAmount:  0,
+      pickupDate: todayString(),
+      timeSlot:   'morning',
+    },
   })
 
-  const addTip     = watch('addTip')
-  const tipAmount  = watch('tipAmount')
-  const pickupDate = watch('pickupDate')
-  const timeSlot   = watch('timeSlot')
+  const addTip    = watch('addTip')
+  const tipAmount = watch('tipAmount')
+  const timeSlot  = watch('timeSlot')
+  const tripType  = watch('tripType')
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -129,7 +144,7 @@ export default function BookingForm() {
   }
 
   return (
-    <section id="booking" className="py-20 md:py-28 bg-neutral-50">
+    <section id="booking" className="py-12 md:py-16 bg-neutral-50">
       <div className="max-w-2xl mx-auto px-4 sm:px-6">
         {/* Header */}
         <div className="text-center mb-10">
@@ -179,31 +194,101 @@ export default function BookingForm() {
 
             {/* ── 2. Pickup & Drop-Off ──────────────────────── */}
             <FormSection title="Pickup & Drop-Off">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="pickupZip" className="input-label">Pickup ZIP Code</label>
-                  <input
-                    id="pickupZip" type="text" inputMode="numeric" maxLength={5} placeholder="95814"
-                    className={clsx('input-field', errors.pickupZip && 'border-red-400 focus:ring-red-100')}
-                    {...register('pickupZip')}
-                  />
-                  {errors.pickupZip && <p className="input-error">{errors.pickupZip.message}</p>}
-                </div>
-                <div>
-                  <label htmlFor="dropoffZip" className="input-label">Drop-Off ZIP Code</label>
-                  <input
-                    id="dropoffZip" type="text" inputMode="numeric" maxLength={5} placeholder="95826"
-                    className={clsx('input-field', errors.dropoffZip && 'border-red-400 focus:ring-red-100')}
-                    {...register('dropoffZip')}
-                  />
-                  {errors.dropoffZip && <p className="input-error">{errors.dropoffZip.message}</p>}
-                </div>
+              {/* Pickup location */}
+              <div>
+                <label htmlFor="pickupAddress" className="input-label">Pickup Address</label>
+                <input
+                  id="pickupAddress" type="text" autoComplete="street-address"
+                  placeholder="123 Main St, Sacramento, CA 95814"
+                  className={clsx('input-field', errors.pickupAddress && 'border-red-400 focus:ring-red-100')}
+                  {...register('pickupAddress')}
+                />
+                {errors.pickupAddress && <p className="input-error">{errors.pickupAddress.message}</p>}
+              </div>
+              <div>
+                <label htmlFor="pickupZip" className="input-label">Pickup ZIP Code</label>
+                <input
+                  id="pickupZip" type="text" inputMode="numeric" maxLength={5} placeholder="95814"
+                  className={clsx('input-field', errors.pickupZip && 'border-red-400 focus:ring-red-100')}
+                  {...register('pickupZip')}
+                />
+                {errors.pickupZip && <p className="input-error">{errors.pickupZip.message}</p>}
+              </div>
+
+              <div className="border-t border-dashed border-neutral-100 pt-2" />
+
+              {/* Drop-off location */}
+              <div>
+                <label htmlFor="dropoffAddress" className="input-label">Drop-Off Address</label>
+                <input
+                  id="dropoffAddress" type="text"
+                  placeholder="e.g. Capitol Toyota, 3820 Florin Rd, Sacramento"
+                  className={clsx('input-field', errors.dropoffAddress && 'border-red-400 focus:ring-red-100')}
+                  {...register('dropoffAddress')}
+                />
+                {errors.dropoffAddress && <p className="input-error">{errors.dropoffAddress.message}</p>}
+              </div>
+              <div>
+                <label htmlFor="dropoffZip" className="input-label">Drop-Off ZIP Code</label>
+                <input
+                  id="dropoffZip" type="text" inputMode="numeric" maxLength={5} placeholder="95826"
+                  className={clsx('input-field', errors.dropoffZip && 'border-red-400 focus:ring-red-100')}
+                  {...register('dropoffZip')}
+                />
+                {errors.dropoffZip && <p className="input-error">{errors.dropoffZip.message}</p>}
               </div>
             </FormSection>
 
             <Divider />
 
-            {/* ── 3. Vehicle & Service ──────────────────────── */}
+            {/* ── 3. Trip Type ───────────────────────────────── */}
+            <FormSection title="Trip Type">
+              <div className="grid sm:grid-cols-2 gap-3">
+                {TRIP_TYPES.map(({ value, label, description, detail, price, emoji }) => {
+                  const selected = tripType === value
+                  return (
+                    <label
+                      key={value}
+                      className={clsx(
+                        'relative flex flex-col gap-1.5 p-4 rounded-2xl border cursor-pointer transition-all duration-150 select-none',
+                        selected
+                          ? 'border-brand-400 bg-brand-50 shadow-sm'
+                          : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50'
+                      )}
+                    >
+                      <input
+                        type="radio" value={value}
+                        className="sr-only"
+                        {...register('tripType')}
+                      />
+                      {selected && (
+                        <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-brand-600 flex items-center justify-center">
+                          <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                            <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </span>
+                      )}
+                      <span className="text-xl" role="img" aria-hidden>{emoji}</span>
+                      <span className={clsx('text-sm font-semibold', selected ? 'text-brand-800' : 'text-neutral-800')}>
+                        {label}
+                      </span>
+                      <span className={clsx('text-lg font-bold', selected ? 'text-brand-600' : 'text-neutral-700')}>
+                        ${price}
+                      </span>
+                      <span className="text-xs text-neutral-400">{description}</span>
+                      <span className={clsx('text-[11px] font-medium mt-0.5', selected ? 'text-brand-500' : 'text-neutral-400')}>
+                        {detail}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+              {errors.tripType && <p className="input-error mt-1">{errors.tripType.message}</p>}
+            </FormSection>
+
+            <Divider />
+
+            {/* ── 4. Vehicle & Service ──────────────────────── */}
             <FormSection title="Vehicle & Service">
               <div>
                 <label htmlFor="vehicleMakeModel" className="input-label">Vehicle Make &amp; Model</label>
@@ -243,7 +328,7 @@ export default function BookingForm() {
 
             <Divider />
 
-            {/* ── 4. Date & Time Slot ───────────────────────── */}
+            {/* ── 5. Date & Time Slot ───────────────────────── */}
             <FormSection title="Schedule Pickup">
               <div>
                 <p className="input-label mb-2">Select a Date</p>
@@ -260,55 +345,57 @@ export default function BookingForm() {
                 />
               </div>
 
-              {/* Time slots reveal once a date is picked */}
-              {pickupDate && (
-                <div className="animate-fade-in">
-                  <p className="input-label mb-3">Preferred Time Window</p>
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    {TIME_SLOTS.map(({ value, label, time, description, emoji }) => {
-                      const selected = timeSlot === value
-                      return (
-                        <label
-                          key={value}
-                          className={clsx(
-                            'relative flex flex-col gap-1.5 p-4 rounded-2xl border cursor-pointer transition-all duration-150 select-none',
-                            selected
-                              ? 'border-brand-400 bg-brand-50 shadow-sm'
-                              : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50'
-                          )}
-                        >
-                          <input
-                            type="radio" value={value}
-                            className="sr-only"
-                            {...register('timeSlot')}
-                          />
-                          {selected && (
-                            <span className="absolute top-3 right-3 w-5 h-5 rounded-full bg-brand-600 flex items-center justify-center">
-                              <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                                <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
-                              </svg>
+              {/* Morning time slot — always visible */}
+              <div>
+                <p className="input-label mb-3">Preferred Time Window</p>
+                <div className="space-y-3">
+                  {TIME_SLOTS.map(({ value, label, time, description, emoji }) => {
+                    const selected = timeSlot === value
+                    return (
+                      <label
+                        key={value}
+                        className={clsx(
+                          'relative flex items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all duration-150 select-none',
+                          selected
+                            ? 'border-brand-400 bg-brand-50 shadow-sm'
+                            : 'border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50'
+                        )}
+                      >
+                        <input
+                          type="radio" value={value}
+                          className="sr-only"
+                          {...register('timeSlot')}
+                        />
+                        <span className="text-2xl" role="img" aria-hidden>{emoji}</span>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className={clsx('text-sm font-semibold', selected ? 'text-brand-800' : 'text-neutral-800')}>
+                              {label}
                             </span>
-                          )}
-                          <span className="text-xl" role="img" aria-hidden>{emoji}</span>
-                          <span className={clsx('text-sm font-semibold', selected ? 'text-brand-800' : 'text-neutral-800')}>
-                            {label}
-                          </span>
-                          <span className={clsx('text-sm font-medium', selected ? 'text-brand-700' : 'text-neutral-600')}>
-                            {time}
-                          </span>
+                            <span className={clsx('text-sm font-medium', selected ? 'text-brand-700' : 'text-neutral-600')}>
+                              · {time}
+                            </span>
+                          </div>
                           <span className="text-xs text-neutral-400">{description}</span>
-                        </label>
-                      )
-                    })}
-                  </div>
-                  {errors.timeSlot && <p className="input-error mt-1">{errors.timeSlot.message}</p>}
+                        </div>
+                        {selected && (
+                          <span className="w-5 h-5 rounded-full bg-brand-600 flex items-center justify-center flex-shrink-0">
+                            <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                              <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </span>
+                        )}
+                      </label>
+                    )
+                  })}
                 </div>
-              )}
+                {errors.timeSlot && <p className="input-error mt-1">{errors.timeSlot.message}</p>}
+              </div>
             </FormSection>
 
             <Divider />
 
-            {/* ── 5. Insurance Upload ───────────────────────── */}
+            {/* ── 6. Insurance Upload ───────────────────────── */}
             <FormSection title="Insurance Document">
               {insuranceFile ? (
                 <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-100 rounded-xl">
@@ -337,7 +424,7 @@ export default function BookingForm() {
 
             <Divider />
 
-            {/* ── 6. Notes ──────────────────────────────────── */}
+            {/* ── 7. Notes ──────────────────────────────────── */}
             <FormSection title="Additional Notes">
               <textarea
                 id="notes" rows={3}
@@ -349,7 +436,7 @@ export default function BookingForm() {
 
             <Divider />
 
-            {/* ── 7. Tip — checkbox toggle + reveal ────────── */}
+            {/* ── 8. Tip — checkbox toggle + reveal ────────── */}
             <FormSection title="Driver Tip">
               <label className="flex items-center gap-3 cursor-pointer select-none group">
                 <div className="relative flex-shrink-0">
@@ -412,7 +499,7 @@ export default function BookingForm() {
 
             <Divider />
 
-            {/* ── 8. Terms ──────────────────────────────────── */}
+            {/* ── 9. Terms ──────────────────────────────────── */}
             <div className="flex items-start gap-3">
               <input
                 id="agreedToTerms" type="checkbox"
@@ -433,8 +520,8 @@ export default function BookingForm() {
 
             <Divider />
 
-            {/* ── 9. Price summary ──────────────────────────── */}
-            <PriceSummary tipAmount={tipAmount} addTip={addTip} />
+            {/* ── 10. Price summary ─────────────────────────── */}
+            <PriceSummary tipAmount={tipAmount} addTip={addTip} tripType={tripType} />
 
             {/* Server error */}
             {serverError && (

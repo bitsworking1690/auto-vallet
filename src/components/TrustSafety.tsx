@@ -47,7 +47,7 @@ const trustItems = [
 
 export default function TrustSafety() {
   return (
-    <section id="trust" className="py-20 md:py-28" style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)' }}>
+    <section id="trust" className="py-12 md:py-16" style={{ background: 'linear-gradient(180deg, #f8fafc 0%, #ffffff 100%)' }}>
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         {/* Header */}
         <div className="text-center mb-14">

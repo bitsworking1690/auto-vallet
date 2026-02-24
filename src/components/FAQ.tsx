@@ -19,7 +19,7 @@ const faqs = [
   },
   {
     q: 'Which areas do you currently serve?',
-    a: 'We currently serve Sacramento, Roseville, Folsom, and Elk Grove. Expanding soon — enter your ZIP at booking to confirm coverage.',
+    a: 'We currently serve Sacramento, Roseville, Folsom, Elk Grove, Woodland, and Davis. Expanding soon — enter your ZIP at booking to confirm coverage.',
   },
 ]
 
@@ -27,7 +27,7 @@ export default function FAQ() {
   const [open, setOpen] = useState<number | null>(0)
 
   return (
-    <section id="faq" className="py-20 md:py-28 bg-white">
+    <section id="faq" className="py-12 md:py-16 bg-white">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-start">
           {/* Left: Engagement copy */}
@@ -46,7 +46,7 @@ export default function FAQ() {
               {[
                 { value: '15 min', label: 'SMS confirmation' },
                 { value: '100%',   label: 'Insured & bonded' },
-                { value: '4 cities', label: 'Service area' },
+                { value: '6 cities', label: 'Service area' },
                 { value: '5★',    label: 'Driver standards' },
               ].map(({ value, label }) => (
                 <div key={label} className="bg-neutral-50 rounded-xl p-4 border border-neutral-100">
