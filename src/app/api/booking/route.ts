@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { bookingSchema } from '@/lib/validations'
+import { BASE_SERVICE_PRICE_CENTS } from '@/lib/validations'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -12,34 +13,43 @@ function coerceFormData(raw: Record<string, FormDataEntryValue>): Record<string,
     dropoffZip:       raw.dropoffZip,
     vehicleMakeModel: raw.vehicleMakeModel,
     serviceType:      raw.serviceType,
+    pickupDate:       raw.pickupDate,
+    timeSlot:         raw.timeSlot,
     preferredShop:    raw.preferredShop   || undefined,
     notes:            raw.notes           || undefined,
+    addTip:           raw.addTip === 'true',
     tipAmount:        raw.tipAmount !== undefined && raw.tipAmount !== '' ? Number(raw.tipAmount) : undefined,
-    paymentMethod:    raw.paymentMethod,
     agreedToTerms:    raw.agreedToTerms === 'true' ? true : raw.agreedToTerms,
   }
 }
 
-// ─── Insurance doc upload (Supabase Storage) ─────────────────────────────────
+const TIME_SLOT_LABELS: Record<string, string> = {
+  morning:   '8:00 AM – 12:00 PM',
+  afternoon: '1:00 PM – 4:00 PM',
+}
+
+const SERVICE_LABELS: Record<string, string> = {
+  maintenance: 'Routine Maintenance',
+  dealership:  'Dealership Visit',
+  recall:      'Recall Service',
+  other:       'Other',
+}
+
+// ─── Insurance doc upload ─────────────────────────────────────────────────────
 
 async function uploadInsuranceDoc(file: File, bookingRef: string): Promise<string | null> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null
-
   try {
     const { supabaseAdmin } = await import('@/lib/supabase')
-    const ext      = file.name.split('.').pop() ?? 'bin'
-    const path     = `insurance/${bookingRef}.${ext}`
-    const buffer   = Buffer.from(await file.arrayBuffer())
+    const ext    = file.name.split('.').pop() ?? 'bin'
+    const path   = `insurance/${bookingRef}.${ext}`
+    const buffer = Buffer.from(await file.arrayBuffer())
 
     const { error } = await supabaseAdmin()
-      .storage
-      .from('booking-docs')
+      .storage.from('booking-docs')
       .upload(path, buffer, { contentType: file.type, upsert: true })
 
-    if (error) {
-      console.error('[AutoValet] Storage upload error:', error.message)
-      return null
-    }
+    if (error) { console.error('[AutoValet] Storage upload error:', error.message); return null }
 
     const { data } = supabaseAdmin().storage.from('booking-docs').getPublicUrl(path)
     return data.publicUrl
@@ -49,9 +59,13 @@ async function uploadInsuranceDoc(file: File, bookingRef: string): Promise<strin
   }
 }
 
-// ─── Save to Supabase ─────────────────────────────────────────────────────────
+// ─── Save booking to Supabase ─────────────────────────────────────────────────
 
-async function saveToSupabase(payload: Record<string, unknown>, insuranceUrl: string | null) {
+async function saveToSupabase(
+  payload: Record<string, unknown>,
+  insuranceUrl: string | null,
+  stripeSessionId: string
+) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     console.warn('[AutoValet] Supabase not configured – skipping DB save')
     return { id: `local-${Date.now()}` }
@@ -69,13 +83,15 @@ async function saveToSupabase(payload: Record<string, unknown>, insuranceUrl: st
       dropoff_zip:        payload.dropoffZip,
       vehicle_make_model: payload.vehicleMakeModel,
       service_type:       payload.serviceType,
+      pickup_date:        payload.pickupDate,
+      time_slot:          payload.timeSlot,
       preferred_shop:     payload.preferredShop ?? null,
       notes:              payload.notes ?? null,
-      tip_amount:         payload.tipAmount ?? null,
-      payment_method:     payload.paymentMethod,
+      tip_amount:         payload.addTip ? (payload.tipAmount ?? null) : null,
       agreed_to_terms:    true,
       insurance_doc_url:  insuranceUrl,
-      status:             'pending',
+      stripe_session_id:  stripeSessionId,
+      status:             'awaiting_payment',
     })
     .select('id')
     .single()
@@ -84,88 +100,117 @@ async function saveToSupabase(payload: Record<string, unknown>, insuranceUrl: st
   return data
 }
 
-// ─── Send confirmation email via Resend ──────────────────────────────────────
+// ─── Create Stripe Checkout session ──────────────────────────────────────────
 
-async function sendConfirmationEmail(payload: Record<string, unknown>, bookingId: string) {
-  if (!process.env.RESEND_API_KEY) {
-    console.warn('[AutoValet] RESEND_API_KEY not set – skipping email')
-    return
+async function createStripeSession(
+  payload: Record<string, unknown>,
+  bookingId: string
+): Promise<string> {
+  if (!process.env.STRIPE_SECRET_KEY) {
+    // Dev fallback: return a mock URL so the flow doesn't hard-fail locally
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    console.warn('[AutoValet] STRIPE_SECRET_KEY not set – returning mock checkout URL')
+    return `${siteUrl}/booking/success?session_id=dev_mock_${bookingId}`
   }
 
-  const { Resend } = await import('resend')
-  const resend     = new Resend(process.env.RESEND_API_KEY)
+  const Stripe         = (await import('stripe')).default
+  const stripe         = new Stripe(process.env.STRIPE_SECRET_KEY)
+  const siteUrl        = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
 
-  const customerName  = `${payload.firstName} ${payload.lastName}`
-  const fromEmail     = process.env.RESEND_FROM_EMAIL  || 'bookings@autovalet.com'
-  const adminEmail    = process.env.RESEND_ADMIN_EMAIL || 'admin@autovalet.com'
+  const tipCents       = payload.addTip && payload.tipAmount
+    ? Math.round(Number(payload.tipAmount) * 100)
+    : 0
 
-  const serviceLabels: Record<string, string> = {
-    maintenance: 'Routine Maintenance',
-    dealership:  'Dealership Visit',
-    recall:      'Recall Service',
-    other:       'Other',
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const lineItems: any[] = [
+    {
+      price_data: {
+        currency:     'usd',
+        product_data: {
+          name:        'AutoValet Concierge Service',
+          description: `${SERVICE_LABELS[payload.serviceType as string] ?? payload.serviceType} · ${payload.vehicleMakeModel} · ${payload.pickupDate} ${TIME_SLOT_LABELS[payload.timeSlot as string] ?? payload.timeSlot}`,
+          images:      [],
+        },
+        unit_amount: BASE_SERVICE_PRICE_CENTS,
+      },
+      quantity: 1,
+    },
+  ]
+
+  // Add tip as a separate line item if provided
+  if (tipCents > 0) {
+    lineItems.push({
+      price_data: {
+        currency:     'usd',
+        product_data: {
+          name:        'Driver Tip',
+          description: '100% goes to your driver',
+        },
+        unit_amount: tipCents,
+      },
+      quantity: 1,
+    })
   }
 
-  const html = `
-<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
-<body style="font-family: system-ui, sans-serif; background: #f9fafb; margin: 0; padding: 40px 20px;">
-  <div style="max-width: 560px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.07);">
-    <div style="background: linear-gradient(135deg, #0e96e7 0%, #0260a0 100%); padding: 32px; text-align: center;">
-      <h1 style="color: white; margin: 0; font-size: 24px; font-weight: 700;">AutoValet</h1>
-      <p style="color: rgba(255,255,255,0.85); margin: 8px 0 0; font-size: 14px;">Concierge Car Service · Sacramento, CA</p>
-    </div>
-    <div style="padding: 32px;">
-      <h2 style="color: #171717; font-size: 20px; margin: 0 0 8px;">Booking Confirmed ✓</h2>
-      <p style="color: #525252; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
-        Hi ${customerName}, we've received your booking and will confirm details by SMS within <strong>15 minutes</strong>.
-      </p>
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ['card'],
+    line_items:           lineItems,
+    mode:                 'payment',
+    success_url:          `${siteUrl}/booking/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url:           `${siteUrl}/booking/cancelled?booking_id=${bookingId}`,
+    customer_email:       undefined, // no email collected – can add later
+    metadata: {
+      booking_id:         bookingId,
+      customer_name:      `${payload.firstName} ${payload.lastName}`,
+      customer_phone:     String(payload.phone),
+      vehicle:            String(payload.vehicleMakeModel),
+      service_type:       String(payload.serviceType),
+      pickup_date:        String(payload.pickupDate),
+      time_slot:          String(payload.timeSlot),
+      pickup_zip:         String(payload.pickupZip),
+      dropoff_zip:        String(payload.dropoffZip),
+    },
+    phone_number_collection: { enabled: false },
+    billing_address_collection: 'auto',
+  })
 
-      <div style="background: #f9fafb; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
-        <table style="width: 100%; border-collapse: collapse;">
-          <tr><td style="padding: 6px 0; color: #737373; font-size: 13px; width: 45%;">Booking ID</td><td style="padding: 6px 0; color: #171717; font-size: 13px; font-weight: 600;">#${bookingId.slice(-8).toUpperCase()}</td></tr>
-          <tr><td style="padding: 6px 0; color: #737373; font-size: 13px;">Vehicle</td><td style="padding: 6px 0; color: #171717; font-size: 13px;">${payload.vehicleMakeModel}</td></tr>
-          <tr><td style="padding: 6px 0; color: #737373; font-size: 13px;">Service</td><td style="padding: 6px 0; color: #171717; font-size: 13px;">${serviceLabels[payload.serviceType as string] ?? payload.serviceType}</td></tr>
-          <tr><td style="padding: 6px 0; color: #737373; font-size: 13px;">Pickup ZIP</td><td style="padding: 6px 0; color: #171717; font-size: 13px;">${payload.pickupZip}</td></tr>
-          <tr><td style="padding: 6px 0; color: #737373; font-size: 13px;">Drop-off ZIP</td><td style="padding: 6px 0; color: #171717; font-size: 13px;">${payload.dropoffZip}</td></tr>
-          ${payload.preferredShop ? `<tr><td style="padding: 6px 0; color: #737373; font-size: 13px;">Preferred Shop</td><td style="padding: 6px 0; color: #171717; font-size: 13px;">${payload.preferredShop}</td></tr>` : ''}
-        </table>
-      </div>
+  return session.url!
+}
 
-      <div style="background: #f0f7ff; border-left: 3px solid #0e96e7; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
-        <p style="margin: 0; color: #0260a0; font-size: 13px; line-height: 1.5;">
-          <strong>What happens next:</strong> Our team will review your booking and send an SMS confirmation to <strong>${payload.phone}</strong> within 15 minutes. We'll coordinate pickup time from there.
-        </p>
-      </div>
+// ─── Send notification email ──────────────────────────────────────────────────
 
-      <p style="color: #737373; font-size: 13px; margin: 0;">
-        Questions? Call or text us at <a href="tel:+19165550100" style="color: #0278c5;">(916) 555-0100</a>
-      </p>
-    </div>
-    <div style="background: #f9fafb; padding: 20px 32px; text-align: center; border-top: 1px solid #e5e5e5;">
-      <p style="margin: 0; color: #a3a3a3; font-size: 12px;">AutoValet · Sacramento, CA · Fully insured & bonded</p>
-    </div>
-  </div>
-</body>
-</html>`
+async function sendAdminNotification(payload: Record<string, unknown>, bookingId: string) {
+  if (!process.env.RESEND_API_KEY) return
+  try {
+    const { Resend } = await import('resend')
+    const resend     = new Resend(process.env.RESEND_API_KEY)
+    const fromEmail  = process.env.RESEND_FROM_EMAIL  || 'bookings@autovalet.com'
+    const adminEmail = process.env.RESEND_ADMIN_EMAIL || 'admin@autovalet.com'
 
-  await Promise.allSettled([
-    // Customer confirmation
-    resend.emails.send({
-      from:    fromEmail,
-      to:      `${customerName} <${payload.phone}@placeholder.com>`,  // replace with real email if collected
-      subject: `AutoValet – Booking Received #${bookingId.slice(-8).toUpperCase()}`,
-      html,
-    }),
-    // Internal admin notification
-    resend.emails.send({
+    await resend.emails.send({
       from:    fromEmail,
       to:      adminEmail,
-      subject: `[AutoValet] New Booking from ${customerName} – ${payload.vehicleMakeModel}`,
-      html,
-    }),
-  ])
+      subject: `[AutoValet] New Booking #${bookingId.slice(-8).toUpperCase()} – ${payload.firstName} ${payload.lastName}`,
+      html: `
+        <h2>New Booking Received</h2>
+        <p><strong>Customer:</strong> ${payload.firstName} ${payload.lastName}</p>
+        <p><strong>Phone:</strong> ${payload.phone}</p>
+        <p><strong>Vehicle:</strong> ${payload.vehicleMakeModel}</p>
+        <p><strong>Service:</strong> ${SERVICE_LABELS[payload.serviceType as string] ?? payload.serviceType}</p>
+        <p><strong>Date:</strong> ${payload.pickupDate}</p>
+        <p><strong>Time:</strong> ${TIME_SLOT_LABELS[payload.timeSlot as string] ?? payload.timeSlot}</p>
+        <p><strong>Pickup ZIP:</strong> ${payload.pickupZip}</p>
+        <p><strong>Drop-off ZIP:</strong> ${payload.dropoffZip}</p>
+        ${payload.preferredShop ? `<p><strong>Shop:</strong> ${payload.preferredShop}</p>` : ''}
+        ${payload.notes ? `<p><strong>Notes:</strong> ${payload.notes}</p>` : ''}
+        <p><strong>Tip:</strong> ${payload.addTip && payload.tipAmount ? `$${payload.tipAmount}` : 'None'}</p>
+        <p><strong>Status:</strong> Awaiting Stripe payment</p>
+        <p><strong>Booking ID:</strong> ${bookingId}</p>
+      `,
+    })
+  } catch (err) {
+    console.error('[AutoValet] Admin email error:', err)
+  }
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
@@ -191,25 +236,41 @@ export async function POST(req: NextRequest) {
 
     const bookingRef = `bk_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
 
+    // Create Stripe session FIRST (fail fast before writing to DB)
+    const checkoutUrl = await createStripeSession(
+      parsed.data as unknown as Record<string, unknown>,
+      bookingRef
+    )
+
     // Upload insurance doc (best-effort)
-    const insuranceDoc  = formData.get('insuranceDoc')
-    const insuranceUrl  = insuranceDoc instanceof File && insuranceDoc.size > 0
+    const insuranceDoc = formData.get('insuranceDoc')
+    const insuranceUrl = insuranceDoc instanceof File && insuranceDoc.size > 0
       ? await uploadInsuranceDoc(insuranceDoc, bookingRef)
       : null
 
-    // Save to DB
-    const booking = await saveToSupabase(parsed.data as unknown as Record<string, unknown>, insuranceUrl)
+    // Extract Stripe session ID from URL
+    const stripeSessionId = checkoutUrl.includes('cs_')
+      ? checkoutUrl.split('cs_')[1]?.split('?')[0] ?? bookingRef
+      : bookingRef
 
-    // Send email (best-effort – never fail the request over email)
-    sendConfirmationEmail(parsed.data as unknown as Record<string, unknown>, booking.id ?? bookingRef).catch((err) =>
-      console.error('[AutoValet] Email error:', err)
+    // Save booking to DB
+    const booking = await saveToSupabase(
+      parsed.data as unknown as Record<string, unknown>,
+      insuranceUrl,
+      stripeSessionId
     )
 
-    return NextResponse.json({ success: true, bookingId: booking.id ?? bookingRef }, { status: 201 })
+    // Admin notification (best-effort)
+    sendAdminNotification(
+      parsed.data as unknown as Record<string, unknown>,
+      booking.id ?? bookingRef
+    ).catch(console.error)
+
+    return NextResponse.json({ success: true, bookingId: booking.id ?? bookingRef, checkoutUrl }, { status: 201 })
   } catch (err) {
     console.error('[AutoValet] Booking error:', err)
     return NextResponse.json(
-      { error: 'Unable to process booking. Please try again or call us directly.' },
+      { error: 'Unable to process your booking. Please try again or call us directly.' },
       { status: 500 }
     )
   }

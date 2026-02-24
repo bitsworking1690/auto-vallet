@@ -23,12 +23,15 @@ create table if not exists public.bookings (
   service_type        text not null check (service_type in ('maintenance','dealership','recall','other')),
   preferred_shop      text,
 
+  -- Schedule
+  pickup_date         date not null,
+  time_slot           text not null check (time_slot in ('morning','afternoon')),
+
   -- Notes
   notes               text,
 
-  -- Payment
+  -- Tip
   tip_amount          numeric(6,2),
-  payment_method      text not null check (payment_method in ('card','applepay','googlepay')),
 
   -- Docs
   insurance_doc_url   text,
@@ -36,23 +39,25 @@ create table if not exists public.bookings (
   -- Agreement
   agreed_to_terms     boolean not null default false,
 
+  -- Stripe
+  stripe_session_id   text,
+  stripe_payment_intent_id text,
+
   -- Status
-  status              text not null default 'pending'
-                        check (status in ('pending','confirmed','in_progress','completed','cancelled'))
+  -- awaiting_payment → confirmed (paid) → in_progress → completed | cancelled
+  status              text not null default 'awaiting_payment'
+                        check (status in ('awaiting_payment','confirmed','in_progress','completed','cancelled'))
 );
 
 -- ─── Row Level Security ───────────────────────────────────────────────────────
 alter table public.bookings enable row level security;
 
--- Service role can do everything (used by API routes)
+-- Service role can do everything (used by API routes and webhooks)
 create policy "Service role full access"
   on public.bookings
   for all
   using (auth.role() = 'service_role')
   with check (auth.role() = 'service_role');
-
--- Anon cannot read bookings (privacy)
--- Public INSERT is handled by the API route using the service role key
 
 -- ─── Storage bucket for insurance docs ───────────────────────────────────────
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -65,7 +70,6 @@ values (
 )
 on conflict (id) do nothing;
 
--- Storage policy: service role only
 create policy "Service role can manage booking-docs"
   on storage.objects
   for all
@@ -73,6 +77,8 @@ create policy "Service role can manage booking-docs"
   with check (bucket_id = 'booking-docs' and auth.role() = 'service_role');
 
 -- ─── Indexes ──────────────────────────────────────────────────────────────────
-create index if not exists bookings_created_at_idx on public.bookings (created_at desc);
-create index if not exists bookings_status_idx     on public.bookings (status);
-create index if not exists bookings_phone_idx      on public.bookings (phone);
+create index if not exists bookings_created_at_idx        on public.bookings (created_at desc);
+create index if not exists bookings_status_idx            on public.bookings (status);
+create index if not exists bookings_phone_idx             on public.bookings (phone);
+create index if not exists bookings_pickup_date_idx       on public.bookings (pickup_date);
+create index if not exists bookings_stripe_session_idx    on public.bookings (stripe_session_id);
