@@ -1,14 +1,21 @@
 import Link from 'next/link'
-import { ArrowRight, ShieldCheck, Clock } from 'lucide-react'
+import { ArrowRight, ShieldCheck, Clock, MapPin } from 'lucide-react'
 
 const trustBadges = [
-  { icon: ShieldCheck, text: 'Fully insured & bonded' },
+  { icon: ShieldCheck, text: 'Fully insured & bonded'    },
   { icon: Clock,       text: 'SMS confirmation in 15 min' },
+  { icon: MapPin,      text: '6 cities served'            },
+]
+
+const stats = [
+  { value: '100%', label: 'Insured'  },
+  { value: 'GPS',  label: 'Tracked'  },
+  { value: '5★',   label: 'Drivers'  },
 ]
 
 export default function Hero() {
   return (
-    <section className="relative overflow-hidden bg-white pt-28 pb-20 md:pt-36 md:pb-28">
+    <section className="relative overflow-hidden bg-white pt-24 pb-10 md:pt-32 md:pb-12">
       {/* Subtle background gradient */}
       <div
         aria-hidden
@@ -30,74 +37,128 @@ export default function Hero() {
         }}
       />
 
-      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 text-center">
-        {/* Label pill */}
-        <div className="inline-flex items-center gap-2 bg-brand-50 text-brand-700 text-xs font-semibold px-3.5 py-1.5 rounded-full mb-8 border border-brand-100 animate-fade-in">
-          <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
-          Now serving Sacramento &amp; surrounding areas
-        </div>
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
 
-        {/* Headline */}
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-neutral-900 leading-[1.08] tracking-tight mb-6 animate-fade-up">
-          We Take Your Car{' '}
-          <span className="text-brand-600">to the Shop</span>
-          <br className="hidden sm:block" />
-          {' '}— So You Don't Have To.
-        </h1>
-
-        {/* Subheadline */}
-        <p className="text-lg md:text-xl text-neutral-500 leading-relaxed max-w-2xl mx-auto mb-10 animate-fade-up animate-delay-100">
-          Book a pickup in under a minute. We handle the service and return
-          your car safely — fully insured, GPS-tracked, and documented.
-        </p>
-
-        {/* CTA buttons */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12 animate-fade-up animate-delay-200">
-          <Link href="#booking" className="btn-primary w-full sm:w-auto text-base px-8 py-4 shadow-md hover:shadow-lg">
-            Book Pickup
-            <ArrowRight size={18} />
-          </Link>
-          <Link href="#how-it-works" className="btn-secondary w-full sm:w-auto text-base px-8 py-4">
-            How It Works
-          </Link>
-        </div>
-
-        {/* Trust badges row */}
-        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-3 animate-fade-up animate-delay-300">
-          {trustBadges.map(({ icon: Icon, text }) => (
-            <div key={text} className="flex items-center gap-2 text-sm text-neutral-500">
-              <Icon size={16} className="text-brand-500 flex-shrink-0" />
-              <span>{text}</span>
+          {/* ── Left: Text content ────────────────────────── */}
+          <div className="text-center lg:text-left">
+            {/* Label pill */}
+            <div className="inline-flex items-center gap-2 bg-brand-50 text-brand-700 text-xs font-semibold px-3.5 py-1.5 rounded-full mb-8 border border-brand-100 animate-fade-in">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse" />
+              Now serving Sacramento &amp; surrounding areas
             </div>
-          ))}
-        </div>
 
-        {/* Visual car illustration card */}
-        <div className="mt-16 max-w-3xl mx-auto animate-fade-up animate-delay-400">
-          <div className="relative rounded-2xl bg-gradient-to-b from-neutral-50 to-white border border-neutral-100 shadow-card overflow-hidden px-8 py-10">
-            {/* Decorative blobs */}
-            <div aria-hidden className="absolute top-0 right-0 w-48 h-48 bg-brand-50 rounded-full -translate-y-1/2 translate-x-1/3 blur-2xl" />
-            <div aria-hidden className="absolute bottom-0 left-0 w-32 h-32 bg-sky-50 rounded-full translate-y-1/2 -translate-x-1/3 blur-xl" />
+            {/* Headline */}
+            <h1 className="text-4xl sm:text-5xl md:text-[3.4rem] font-bold text-neutral-900 leading-[1.08] tracking-tight mb-6 animate-fade-up">
+              We Take Your Car{' '}
+              <span className="text-brand-600">to the Shop</span>
+              {' '}— So You Don&apos;t Have To.
+            </h1>
 
-            {/* Steps preview */}
-            <div className="relative grid grid-cols-3 gap-4 text-center">
-              {[
-                { step: '01', label: 'Book in 60 seconds',    emoji: '📱' },
-                { step: '02', label: 'We pick up your car',   emoji: '🚗' },
-                { step: '03', label: 'Returned serviced',      emoji: '✅' },
-              ].map(({ step, label, emoji }, i) => (
-                <div key={step} className="flex flex-col items-center gap-2">
-                  {i < 2 && (
-                    <div aria-hidden className="absolute top-6 hidden md:block"
-                      style={{ left: `${i === 0 ? '31%' : '64%'}`, width: '8%' }}>
-                      <div className="h-px bg-neutral-200 w-full mt-1" />
-                    </div>
-                  )}
-                  <div className="text-2xl">{emoji}</div>
-                  <div className="text-xs font-semibold text-brand-500 tracking-widest uppercase">{step}</div>
-                  <div className="text-sm font-medium text-neutral-700">{label}</div>
+            {/* Subheadline */}
+            <p className="text-lg md:text-xl text-neutral-500 leading-relaxed max-w-xl mx-auto lg:mx-0 mb-8 animate-fade-up animate-delay-100">
+              Book a pickup in under a minute. We handle the service and return
+              your car safely — fully insured, GPS-tracked, and documented.
+            </p>
+
+            {/* CTA buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-3 mb-10 animate-fade-up animate-delay-200">
+              <Link href="#booking" className="btn-primary w-full sm:w-auto text-base px-8 py-4 shadow-md hover:shadow-lg">
+                Book Pickup
+                <ArrowRight size={18} />
+              </Link>
+              <Link href="#how-it-works" className="btn-secondary w-full sm:w-auto text-base px-8 py-4">
+                How It Works
+              </Link>
+            </div>
+
+            {/* Trust badges row */}
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-x-6 gap-y-3 animate-fade-up animate-delay-300">
+              {trustBadges.map(({ icon: Icon, text }) => (
+                <div key={text} className="flex items-center gap-2 text-sm text-neutral-500">
+                  <Icon size={15} className="text-brand-500 flex-shrink-0" />
+                  <span>{text}</span>
                 </div>
               ))}
+            </div>
+          </div>
+
+          {/* ── Right: Visual card with image ─────────────── */}
+          <div className="relative animate-fade-up animate-delay-400">
+            {/* Main image card */}
+            <div
+              className="relative rounded-3xl overflow-hidden shadow-lift"
+              style={{ minHeight: '420px' }}
+            >
+              {/* Gradient background (always shown; image overlays it) */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: 'linear-gradient(135deg, #1a3a5c 0%, #0278c5 55%, #38bdf8 100%)',
+                }}
+              />
+
+              {/* Photo — professional driver handing over car keys */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=900&auto=format&fit=crop&q=80"
+                alt="Professional AutoValet driver handing car keys with care"
+                className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-60"
+                loading="eager"
+              />
+
+              {/* Dark gradient overlay bottom */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: 'linear-gradient(to top, rgba(10,30,55,0.85) 0%, rgba(10,30,55,0.2) 50%, transparent 100%)',
+                }}
+              />
+
+              {/* Step cards floating over image */}
+              <div className="relative z-10 p-8 flex flex-col justify-between" style={{ minHeight: '420px' }}>
+                {/* Top steps */}
+                <div className="flex gap-3">
+                  {[
+                    { step: '01', label: 'Book online',   icon: '📱' },
+                    { step: '02', label: 'We pick up',    icon: '🚗' },
+                    { step: '03', label: 'Car returned',  icon: '✅' },
+                  ].map(({ step, label, icon }) => (
+                    <div key={step} className="flex-1 bg-white/15 backdrop-blur-sm rounded-2xl p-3 border border-white/20 text-center">
+                      <div className="text-xl mb-1">{icon}</div>
+                      <div className="text-[10px] font-bold text-brand-200 tracking-widest uppercase">{step}</div>
+                      <div className="text-xs font-medium text-white mt-0.5">{label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Bottom stats bar */}
+                <div className="bg-white/95 backdrop-blur-sm rounded-2xl p-4 shadow-card">
+                  <p className="text-xs font-semibold text-neutral-400 uppercase tracking-widest mb-3 text-center">
+                    Every trip, guaranteed
+                  </p>
+                  <div className="grid grid-cols-3 divide-x divide-neutral-100">
+                    {stats.map(({ value, label }) => (
+                      <div key={label} className="text-center px-3">
+                        <div className="text-xl font-bold text-neutral-900">{value}</div>
+                        <div className="text-xs text-neutral-500 mt-0.5">{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Floating badge — top right */}
+            <div className="absolute -top-3 -right-3 bg-emerald-500 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-lift flex items-center gap-1.5">
+              <ShieldCheck size={14} />
+              Fully Insured
+            </div>
+
+            {/* Floating badge — bottom left */}
+            <div className="absolute -bottom-3 -left-3 bg-white border border-neutral-100 shadow-card text-xs font-semibold text-neutral-700 px-3 py-2 rounded-xl flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Available Today
             </div>
           </div>
         </div>

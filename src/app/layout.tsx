@@ -8,13 +8,15 @@ export const metadata: Metadata = {
     template: '%s | AutoValet Sacramento',
   },
   description:
-    'AutoValet picks up your vehicle, takes it to the dealership or shop, and returns it serviced and ready. Serving Sacramento, Roseville, Folsom, and Elk Grove. Book in under 60 seconds.',
+    'AutoValet picks up your vehicle, takes it to the dealership or shop, and returns it serviced and ready. Serving Sacramento, Roseville, Folsom, Elk Grove, Woodland, and Davis. Book in under 60 seconds.',
   keywords: [
     'car pickup service Sacramento',
     'dealership concierge Sacramento',
     'vehicle pickup drop-off Sacramento',
     'car service pickup Roseville',
     'auto concierge Elk Grove',
+    'car pickup service Woodland CA',
+    'auto concierge Davis CA',
     'dealership shuttle Sacramento',
     'car pickup Folsom CA',
     'vehicle concierge service California',
@@ -74,6 +76,8 @@ const localBusinessSchema = {
     { '@type': 'City', name: 'Roseville',  containedInPlace: { '@type': 'State', name: 'California' } },
     { '@type': 'City', name: 'Folsom',     containedInPlace: { '@type': 'State', name: 'California' } },
     { '@type': 'City', name: 'Elk Grove',  containedInPlace: { '@type': 'State', name: 'California' } },
+    { '@type': 'City', name: 'Woodland',   containedInPlace: { '@type': 'State', name: 'California' } },
+    { '@type': 'City', name: 'Davis',      containedInPlace: { '@type': 'State', name: 'California' } },
   ],
   openingHoursSpecification: [
     { '@type': 'OpeningHoursSpecification', dayOfWeek: ['Monday','Tuesday','Wednesday','Thursday','Friday'], opens: '07:00', closes: '19:00' },

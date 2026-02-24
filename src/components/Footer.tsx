@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-const serviceAreas = ['Sacramento', 'Roseville', 'Folsom', 'Elk Grove']
+const serviceAreas = ['Sacramento', 'Roseville', 'Folsom', 'Elk Grove', 'Woodland', 'Davis']
 
 const links = {
   Service: [
